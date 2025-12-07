@@ -124,6 +124,38 @@ async function run() {
         const result = await ticketsCollection.insertOne(item);
         res.send(result);
     });
+    // --- Get Single Ticket (For Details Page) ---
+    app.get('/tickets/:id', async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await ticketsCollection.findOne(query);
+      res.send(result);
+    });
+
+    // --- Booking APIs ---
+    // 1. Save a Booking
+    app.post('/bookings', verifyToken, async (req, res) => {
+      const booking = req.body;
+      const result = await bookingsCollection.insertOne(booking);
+      res.send(result);
+    });
+
+    // 2. Get Bookings for a Specific User
+    app.get('/bookings', verifyToken, async (req, res) => {
+      const email = req.query.email;
+      if (!email) return res.send([]);
+      const query = { customerEmail: email };
+      const result = await bookingsCollection.find(query).toArray();
+      res.send(result);
+    });
+    
+    // 3. Delete/Cancel a Booking
+    app.delete('/bookings/:id', verifyToken, async(req, res) => {
+        const id = req.params.id;
+        const query = { _id: new ObjectId(id) };
+        const result = await bookingsCollection.deleteOne(query);
+        res.send(result);
+    })
 
     // --- Payment Intent (Stripe) ---
     app.post('/create-payment-intent', verifyToken, async (req, res) => {
