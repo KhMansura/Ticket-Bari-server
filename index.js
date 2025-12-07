@@ -110,6 +110,21 @@ async function run() {
         const result = await usersCollection.updateOne(filter, updatedDoc);
         res.send(result);
     })
+    // --- Get Tickets by Vendor Email (For My Added Tickets page) ---
+    app.get('/tickets/vendor/:email', verifyToken, async (req, res) => {
+        const email = req.params.email;
+        const query = { vendorEmail: email };
+        const result = await ticketsCollection.find(query).toArray();
+        res.send(result);
+    });
+
+    // --- Delete a Ticket ---
+    app.delete('/tickets/:id', verifyToken, async (req, res) => {
+        const id = req.params.id;
+        const query = { _id: new ObjectId(id) };
+        const result = await ticketsCollection.deleteOne(query);
+        res.send(result);
+    });
 
 
     // --- Ticket APIs ---
@@ -124,6 +139,22 @@ async function run() {
         const result = await ticketsCollection.insertOne(item);
         res.send(result);
     });
+    // Get Tickets by Vendor Email (Required for "My Added Tickets" page)
+    app.get('/tickets/vendor/:email', verifyToken, async (req, res) => {
+        const email = req.params.email;
+        const query = { vendorEmail: email };
+        const result = await ticketsCollection.find(query).toArray();
+        res.send(result);
+    });
+
+    // Delete a Ticket
+    app.delete('/tickets/:id', verifyToken, async (req, res) => {
+        const id = req.params.id;
+        const query = { _id: new ObjectId(id) };
+        const result = await ticketsCollection.deleteOne(query);
+        res.send(result);
+    });
+
     // --- Get Single Ticket (For Details Page) ---
     app.get('/tickets/:id', async (req, res) => {
       const id = req.params.id;
