@@ -121,6 +121,31 @@ async function run() {
         const result = await ticketsCollection.updateOne(filter, updatedDoc);
         res.send(result);
     });
+    // --- ADMIN: Toggle Advertisement ---
+    app.patch('/tickets/advertise/:id', verifyToken, verifyAdmin, async (req, res) => {
+        const id = req.params.id;
+        const { isAdvertised } = req.body; 
+        
+        if (isAdvertised) {
+            const count = await ticketsCollection.countDocuments({ isAdvertised: true });
+            if (count >= 6) {
+                return res.send({ message: 'limit_reached' });
+            }
+        }
+
+        const filter = { _id: new ObjectId(id) };
+        const updatedDoc = {
+            $set: { isAdvertised: isAdvertised }
+        };
+        const result = await ticketsCollection.updateOne(filter, updatedDoc);
+        res.send(result);
+    });
+
+    // --- PUBLIC: Get Advertised Tickets (For Home Page) ---
+    app.get('/tickets/advertised', async (req, res) => {
+        const result = await ticketsCollection.find({ isAdvertised: true }).limit(6).toArray();
+        res.send(result);
+    });
 
     // --- VENDOR: Accept/Reject Booking ---
     app.patch('/bookings/status/:id', verifyToken, async (req, res) => {
@@ -221,22 +246,36 @@ async function run() {
         clientSecret: paymentIntent.client_secret
       });
     });
-    // --- Save Payment Info ---
+    // --- Get Payments by Email ---
+    app.get('/payments/:email', verifyToken, async (req, res) => {
+        const query = { email: req.params.email };
+        const result = await db.collection('payments').find(query).toArray();
+        res.send(result);
+    });
+    // --- Save Payment Info & Update Quantity ---
     app.post('/payments', verifyToken, async (req, res) => {
       const payment = req.body;
-      const insertResult = await bookingsCollection.insertOne(payment); // NOTE: Changed db.collection to bookingsCollection or create a new paymentsCollection
+      
+      // 1. Save Payment to 'payments' collection
+      const insertResult = await db.collection('payments').insertOne(payment);
 
-      // You likely want a separate collection for payments, so let's use the DB instance:
-      const paymentResult = await db.collection('payments').insertOne(payment);
+      // 2. Update Booking Status to 'paid' in 'bookings' collection
+      const bookingQuery = { _id: new ObjectId(payment.bookingId) };
+      const updatedBooking = { $set: { status: 'paid' } };
+      await bookingsCollection.updateOne(bookingQuery, updatedBooking);
 
-      // Also update the booking status to 'paid'
-      const query = { _id: new ObjectId(payment.bookingId) };
-      const updatedDoc = {
-        $set: { status: 'paid' }
+      // 3. REDUCE TICKET QUANTITY
+      // Find the booking to get the Ticket ID and Quantity
+      const booking = await bookingsCollection.findOne(bookingQuery);
+      
+      if(booking){
+          const ticketQuery = { _id: new ObjectId(booking.ticketId) };
+          // $inc means "increment". Using negative number decreases the quantity.
+          const updateTicket = { $inc: { quantity: -booking.bookingQty } }; 
+          await ticketsCollection.updateOne(ticketQuery, updateTicket);
       }
-      const updateResult = await bookingsCollection.updateOne(query, updatedDoc);
 
-      res.send(paymentResult);
+      res.send(insertResult);
     });
 
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
