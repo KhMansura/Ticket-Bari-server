@@ -174,6 +174,35 @@ async function run() {
         const result = await ticketsCollection.find(query).toArray();
         res.send(result);
     });
+    // --- VENDOR: Get Analytics/Stats ---
+    app.get('/vendor-stats/:email', verifyToken, async (req, res) => {
+      const email = req.params.email;
+      const tickets = await ticketsCollection.find({ vendorEmail: email }).toArray();
+      const bookings = await bookingsCollection.find({ vendorEmail: email }).toArray();
+      
+      const totalTickets = tickets.length;
+      const totalBookings = bookings.length;
+      
+      // Calculate Revenue
+      const totalRevenue = bookings.reduce((sum, booking) => {
+        return booking.status === 'paid' ? sum + booking.totalPrice : sum;
+      }, 0);
+
+      // Prepare Chart Data
+      const chartData = bookings.reduce((acc, booking) => {
+         if (booking.status === 'paid') {
+             const existing = acc.find(item => item.name === booking.ticketTitle);
+             if (existing) {
+                 existing.value += booking.totalPrice;
+             } else {
+                 acc.push({ name: booking.ticketTitle, value: booking.totalPrice });
+             }
+         }
+         return acc;
+      }, []);
+
+      res.send({ totalTickets, totalBookings, totalRevenue, chartData });
+    });
 
     // --- Delete a Ticket ---
     app.delete('/tickets/:id', verifyToken, async (req, res) => {
