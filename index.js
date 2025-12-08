@@ -110,6 +110,38 @@ async function run() {
         const result = await usersCollection.updateOne(filter, updatedDoc);
         res.send(result);
     })
+    // --- ADMIN: Approve/Reject Ticket ---
+    app.patch('/tickets/status/:id', verifyToken, verifyAdmin, async (req, res) => {
+        const id = req.params.id;
+        const { status } = req.body; // { status: 'approved' } or 'rejected'
+        const filter = { _id: new ObjectId(id) };
+        const updatedDoc = {
+            $set: { verificationStatus: status }
+        };
+        const result = await ticketsCollection.updateOne(filter, updatedDoc);
+        res.send(result);
+    });
+
+    // --- VENDOR: Accept/Reject Booking ---
+    app.patch('/bookings/status/:id', verifyToken, async (req, res) => {
+        const id = req.params.id;
+        const { status } = req.body; // { status: 'approved' } or 'rejected'
+        const filter = { _id: new ObjectId(id) };
+        const updatedDoc = {
+            $set: { status: status }
+        };
+        const result = await bookingsCollection.updateOne(filter, updatedDoc);
+        res.send(result);
+    });
+    
+    // --- VENDOR: Get Bookings for THEIR tickets ---
+    app.get('/bookings/vendor', verifyToken, async (req, res) => {
+        const email = req.query.email;
+        const query = { vendorEmail: email };
+        const result = await bookingsCollection.find(query).toArray();
+        res.send(result);
+    });
+
     // --- Get Tickets by Vendor Email (For My Added Tickets page) ---
     app.get('/tickets/vendor/:email', verifyToken, async (req, res) => {
         const email = req.params.email;
@@ -202,6 +234,23 @@ async function run() {
       res.send({
         clientSecret: paymentIntent.client_secret
       });
+    });
+    // --- Save Payment Info ---
+    app.post('/payments', verifyToken, async (req, res) => {
+      const payment = req.body;
+      const insertResult = await bookingsCollection.insertOne(payment); // NOTE: Changed db.collection to bookingsCollection or create a new paymentsCollection
+
+      // You likely want a separate collection for payments, so let's use the DB instance:
+      const paymentResult = await db.collection('payments').insertOne(payment);
+
+      // Also update the booking status to 'paid'
+      const query = { _id: new ObjectId(payment.bookingId) };
+      const updatedDoc = {
+        $set: { status: 'paid' }
+      }
+      const updateResult = await bookingsCollection.updateOne(query, updatedDoc);
+
+      res.send(paymentResult);
     });
 
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
