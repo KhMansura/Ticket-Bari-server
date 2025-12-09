@@ -85,7 +85,8 @@ async function run() {
         if (email !== req.decoded.email) {
             return res.status(403).send({ message: 'unauthorized access' })
         }
-        const query = { email: email };
+        // const query = { email: email };
+        const query = { email: { $regex: new RegExp(`^${email}$`, 'i') } };
         const user = await usersCollection.findOne(query);
         let role = 'user';
         if (user) {
