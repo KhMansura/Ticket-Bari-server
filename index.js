@@ -226,6 +226,29 @@ async function run() {
         const result = await ticketsCollection.insertOne(item);
         res.send(result);
     });
+    // Update a Ticket (For Vendor Update Button)
+    app.patch('/tickets/:id', verifyToken, async (req, res) => {
+      const id = req.params.id;
+      const updatedTicket = req.body;
+      const filter = { _id: new ObjectId(id) };
+      
+      const updateDoc = {
+        $set: {
+          title: updatedTicket.title,
+          from: updatedTicket.from,
+          to: updatedTicket.to,
+          transportType: updatedTicket.transportType,
+          price: updatedTicket.price,
+          quantity: updatedTicket.quantity,
+          departureDate: updatedTicket.departureDate,
+          perks: updatedTicket.perks,
+          photo: updatedTicket.photo
+        }
+      };
+
+      const result = await ticketsCollection.updateOne(filter, updateDoc);
+      res.send(result);
+    });
     
 
     // --- Get Single Ticket (For Details Page) ---
