@@ -111,6 +111,31 @@ async function run() {
         const result = await usersCollection.updateOne(filter, updatedDoc);
         res.send(result);
     })
+    // Mark Vendor as Fraud (Requirement 7c)
+    app.patch('/users/fraud/:id', verifyToken, async (req, res) => {
+      const id = req.params.id;
+      // ... (The rest of your code) ...
+      const user = await usersCollection.findOne({ _id: new ObjectId(id) });
+      
+      if(!user) {
+        return res.status(404).send({ message: "User not found" });
+      }
+
+      // 1. Change User Role to 'fraud'
+      const userFilter = { _id: new ObjectId(id) };
+      const updatedUser = { $set: { role: 'fraud' } };
+      const userResult = await usersCollection.updateOne(userFilter, updatedUser);
+
+      // 2. Hide/Reject all tickets by this Vendor
+      const ticketFilter = { vendorEmail: user.email };
+      const updatedTickets = { $set: { verificationStatus: 'rejected', isAdvertised: false } };
+      const ticketResult = await ticketsCollection.updateMany(ticketFilter, updatedTickets);
+
+      res.send({ 
+        userModified: userResult.modifiedCount, 
+        ticketsModified: ticketResult.modifiedCount 
+      });
+    });
     // --- ADMIN: Approve/Reject Ticket ---
     app.patch('/tickets/status/:id', verifyToken, verifyAdmin, async (req, res) => {
         const id = req.params.id;
