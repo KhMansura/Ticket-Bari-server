@@ -375,7 +375,6 @@ const express = require('express');
 const cors = require('cors');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 require('dotenv').config();
-// ❌ REMOVED: const jwt = require('jsonwebtoken'); 
 const admin = require("firebase-admin");
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
@@ -415,7 +414,7 @@ async function run() {
     const bookingsCollection = db.collection('bookings');
 
     // --------------------------------------------------------
-    // ✅ NEW MIDDLEWARE: VERIFY FIREBASE TOKEN
+    //  MIDDLEWARE: VERIFY FIREBASE TOKEN
     // --------------------------------------------------------
     const verifyToken = async (req, res, next) => {
       if (!req.headers.authorization) {
@@ -445,8 +444,6 @@ async function run() {
       }
       next();
     };
-
-    // ❌ REMOVED: app.post('/jwt') route. It is no longer needed.
 
     // --- User API (Save user to DB) ---
     app.post('/users', async (req, res) => {
@@ -665,6 +662,23 @@ async function run() {
       const result = await ticketsCollection.findOne(query);
       res.send(result);
     });
+    // --- Get Taken Seats for a Ticket (NEW) ---
+    app.get('/tickets/taken-seats/:id', async (req, res) => {
+        const id = req.params.id;
+        // Find all bookings for this ticket that are NOT rejected
+        const query = { ticketId: id, status: { $ne: 'rejected' } };
+        const bookings = await bookingsCollection.find(query).toArray();
+        
+        // Combine all seat numbers into one array
+        let takenSeats = [];
+        bookings.forEach(booking => {
+            if (booking.seatNumbers && Array.isArray(booking.seatNumbers)) {
+                takenSeats = [...takenSeats, ...booking.seatNumbers];
+            }
+        });
+        
+        res.send(takenSeats);
+    });
 
     // --- Booking APIs ---
     // 1. Save a Booking
@@ -684,9 +698,31 @@ async function run() {
     });
     
     // 3. Delete/Cancel a Booking
+    // app.delete('/bookings/:id', verifyToken, async(req, res) => {
+    //     const id = req.params.id;
+    //     const query = { _id: new ObjectId(id) };
+    //     const result = await bookingsCollection.deleteOne(query);
+    //     res.send(result);
+    // })
+    // 3. Delete/Cancel a Booking (Only if status is 'pending')
     app.delete('/bookings/:id', verifyToken, async(req, res) => {
         const id = req.params.id;
         const query = { _id: new ObjectId(id) };
+        
+        // 1. Find the booking first
+        const booking = await bookingsCollection.findOne(query);
+
+        // 2. Check status
+        if (!booking) {
+            return res.status(404).send({ message: "Booking not found" });
+        }
+        
+        // Requirement 2: Only allow cancel if status is 'pending'
+        if (booking.status !== 'pending') {
+            return res.status(403).send({ message: "Cannot cancel. Vendor has already accepted or it is paid." });
+        }
+
+        // 3. Delete if safe
         const result = await bookingsCollection.deleteOne(query);
         res.send(result);
     })
