@@ -3,7 +3,7 @@
 The backend API service for **TicketBari** - a comprehensive Online Ticket Booking Platform. This server handles authentication, payment processing, data management, and secure admin verification.
 
 🔗 **Live API URL:** [https://ticket-bari-server-deploy-link.vercel.app](https://ticket-bari-server-deploy-link.vercel.app)  
-📂 **Client Repository:** [Link to your Client Repo](https://github.com/KhMansura/Ticket-Bari-client.git)
+📂 **Client Repository:** [Link to Client Repo](https://github.com/KhMansura/Ticket-Bari-client.git)
 
 ---
 
