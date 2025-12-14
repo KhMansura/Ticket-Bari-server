@@ -38,7 +38,7 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     // Connect the client to the server
-    // await client.connect(); 
+    await client.connect(); 
     
     const db = client.db('TicketBariDB');
     const usersCollection = db.collection('users');
@@ -121,7 +121,7 @@ async function run() {
     //     res.send(result);
     // })
 
-    // ✅ Correct "Make Admin / Make Vendor / Make User" API
+    // "Make Admin / Make Vendor / Make User" API
 app.patch('/users/admin/:id', verifyToken, verifyAdmin, async (req, res) => {
     const id = req.params.id;
     const { role } = req.body; // <--- This is the key fix!
@@ -435,3 +435,4 @@ app.get('/', (req, res) => {
 app.listen(port, () => {
   console.log(`TicketBari is running on port ${port}`);
 });
+module.exports = app;
