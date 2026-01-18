@@ -19,18 +19,39 @@ const serviceAccount = JSON.parse(decoded);
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
 });
+const privateKey = process.env.FIREBASE_PRIVATE_KEY 
+    ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n') 
+    : undefined;
+
+if (!admin.apps.length) {
+    admin.initializeApp({
+        credential: admin.credential.cert({
+            projectId: process.env.FIREBASE_PROJECT_ID,
+            clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+            privateKey: privateKey,
+        }),
+    });
+}
 
 // Middleware
-app.use(cors());
+// app.use(cors());
+app.use(cors({
+  origin: [
+    'http://localhost:5173', 
+    'https://ticket-bari-89e64.web.app',
+    'https://ticket-bari-89e64.firebaseapp.com'
+  ],
+  credentials: true
+}));
 app.use(express.json());
 
 // MongoDB Connection
-const uri = process.env.MONGODB_URI;
+//  const uri = process.env.MONGODB_URI;
 // const uri = "mongodb+srv://tiketBari:7EqBz4gBPfCgLdE1@cluster0.hytrggc.mongodb.net/?appName=Cluster0";
-// const uri= "mongodb://ticketadmin:Wg18oaS1nhPtDlBA@cluster0.hytrggc.mongodb.net/?appName=Cluster0&retryWrites=true&w=majority";
+//const uri= "mongodb://ticketadmin:Wg18oaS1nhPtDlBA@cluster0.hytrggc.mongodb.net/?appName=Cluster0&retryWrites=true&w=majority";
 // const uri= "mongodb+srv://ticketadmin:CRg8SgXIPf1KLCq5@cluster0.shyhiog.mongodb.net/?appName=Cluster0";
 
-
+const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.hytrggc.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 const client = new MongoClient(uri, {
   serverApi: {
     version: ServerApiVersion.v1,
@@ -120,7 +141,7 @@ app.get('/user-stats/:email', verifyToken, async (req, res) => {
         { $group: { _id: '$status', count: { $sum: 1 } } }
     ]).toArray();
 
-    // 4. Monthly Spending Chart Data (Recent 6 months)
+    // 4. Monthly Spending Chart Data
     const spendingHistory = paymentData.map(p => ({
         month: new Date(p.date).toLocaleString('default', { month: 'short' }),
         amount: p.price
