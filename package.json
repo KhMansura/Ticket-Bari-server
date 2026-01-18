@@ -22,7 +22,7 @@
     "firebase-admin": "^13.6.0",
     "jsonwebtoken": "^9.0.3",
     "mongodb": "^7.0.0",
-    "mongoose": "^9.0.1",
+    "mongoose": "^9.1.4",
     "stripe": "^20.0.0"
   },
   "devDependencies": {

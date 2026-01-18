@@ -1,48 +1,6 @@
-const express = require('express');
-const cors = require('cors');
-const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
-require('dotenv').config();
-const admin = require("firebase-admin");
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-
-const app = express();
-const port = process.env.PORT || 5000;
-
-// Initialize Firebase Admin
-// const serviceAccount = require("./serviceAccountKey.json");
-
-// const serviceAccount = require("./firebase-admin-key.json");
-
-const decoded = Buffer.from(process.env.FB_SERVICE_KEY, 'base64').toString('utf8')
-const serviceAccount = JSON.parse(decoded);
-
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount)
-});
-
-// Middleware
-app.use(cors());
-app.use(express.json());
-
-// MongoDB Connection
-const uri = process.env.MONGODB_URI;
-// const uri = "mongodb+srv://tiketBari:7EqBz4gBPfCgLdE1@cluster0.hytrggc.mongodb.net/?appName=Cluster0";
-// const uri= "mongodb://ticketadmin:Wg18oaS1nhPtDlBA@cluster0.hytrggc.mongodb.net/?appName=Cluster0&retryWrites=true&w=majority";
-// const uri= "mongodb+srv://ticketadmin:CRg8SgXIPf1KLCq5@cluster0.shyhiog.mongodb.net/?appName=Cluster0";
-
-
-const client = new MongoClient(uri, {
-  serverApi: {
-    version: ServerApiVersion.v1,
-    strict: true,
-    deprecationErrors: true,
-  }
-});
-
-
 async function run() {
   try {
-    // Connect client to server
+    // Connect the client to the server
     await client.connect(); 
     console.log("✅ Successfully connected to MongoDB!");
     
@@ -51,9 +9,9 @@ async function run() {
     const ticketsCollection = db.collection('tickets');
     const bookingsCollection = db.collection('bookings');
 
-  
+    // --------------------------------------------------------
     //  MIDDLEWARE: VERIFY FIREBASE TOKEN
-    
+    // --------------------------------------------------------
     const verifyToken = async (req, res, next) => {
       if (!req.headers.authorization) {
         return res.status(401).send({ message: 'forbidden access' });
@@ -82,15 +40,6 @@ async function run() {
       }
       next();
     };
-    // --- Stop Demo Admin Middleware ---
-const stopDemoAdmin = (req, res, next) => {
-    const email = req.decoded.email;
-    // Check if the user is the demo admin and trying to do anything other than GET
-    if (email === 'admin@ticketbari.com' && req.method !== 'GET') {
-        return res.status(403).send({ message: 'Demo Admin cannot modify data' });
-    }
-    next();
-};
 
     // --- User API ---
     app.post('/users', async (req, res) => {
@@ -103,36 +52,6 @@ const stopDemoAdmin = (req, res, next) => {
       const result = await usersCollection.insertOne(user);
       res.send(result);
     });
-    // --- USER: Stats Overview API ---
-app.get('/user-stats/:email', verifyToken, async (req, res) => {
-    const email = req.params.email;
-
-    // 1. Mot koto gulo ticket book koreche
-    const totalBookings = await bookingsCollection.countDocuments({ customerEmail: email });
-
-    // 2. Mot koto taka khoroch (Paid amount)
-    const paymentData = await db.collection('payments').find({ email: email }).toArray();
-    const totalSpent = paymentData.reduce((sum, payment) => sum + payment.price, 0);
-
-    // 3. Status wise booking counts (Pending vs Paid vs Rejected)
-    const bookingStats = await bookingsCollection.aggregate([
-        { $match: { customerEmail: email } },
-        { $group: { _id: '$status', count: { $sum: 1 } } }
-    ]).toArray();
-
-    // 4. Monthly Spending Chart Data (Recent 6 months)
-    const spendingHistory = paymentData.map(p => ({
-        month: new Date(p.date).toLocaleString('default', { month: 'short' }),
-        amount: p.price
-    }));
-
-    res.send({
-        totalBookings,
-        totalSpent,
-        bookingStats,
-        spendingHistory
-    });
-});
     
     // Get user role
     app.get('/users/role/:email', verifyToken, async (req, res) => {
@@ -155,10 +74,19 @@ app.get('/user-stats/:email', verifyToken, async (req, res) => {
       res.send(result);
     });
 
+    // Make Admin API
+    // app.patch('/users/admin/:id', verifyToken, async (req, res) => {
+    //     const id = req.params.id;
+    //     const filter = { _id: new ObjectId(id) };
+    //     const updatedDoc = {
+    //         $set: { role: 'admin' }
+    //     };
+    //     const result = await usersCollection.updateOne(filter, updatedDoc);
+    //     res.send(result);
+    // })
 
-
-    // "Make Admin / Vendor / User" API
-app.patch('/users/admin/:id', verifyToken, verifyAdmin,stopDemoAdmin, async (req, res) => {
+    // "Make Admin / Make Vendor / Make User" API
+app.patch('/users/admin/:id', verifyToken, verifyAdmin, async (req, res) => {
     const id = req.params.id;
     const { role } = req.body;
 
@@ -177,7 +105,7 @@ app.patch('/users/admin/:id', verifyToken, verifyAdmin,stopDemoAdmin, async (req
 });
 
     // Mark Vendor as Fraud
-    app.patch('/users/fraud/:id', verifyToken,stopDemoAdmin, async (req, res) => {
+    app.patch('/users/fraud/:id', verifyToken, async (req, res) => {
       const id = req.params.id;
       const user = await usersCollection.findOne({ _id: new ObjectId(id) });
       
@@ -190,7 +118,7 @@ app.patch('/users/admin/:id', verifyToken, verifyAdmin,stopDemoAdmin, async (req
       const updatedUser = { $set: { role: 'fraud' } };
       const userResult = await usersCollection.updateOne(userFilter, updatedUser);
 
-      // 2. Reject all tickets by this Vendor
+      // 2. Hide/Reject all tickets by this Vendor
       const ticketFilter = { vendorEmail: user.email };
       const updatedTickets = { $set: { verificationStatus: 'rejected', isAdvertised: false } };
       const ticketResult = await ticketsCollection.updateMany(ticketFilter, updatedTickets);
@@ -201,46 +129,8 @@ app.patch('/users/admin/:id', verifyToken, verifyAdmin,stopDemoAdmin, async (req
       });
     });
 
-    // --- ADMIN: Stats Overview API ---
-app.get('/admin-stats', verifyToken, verifyAdmin, async (req, res) => {
-    const totalUsers = await usersCollection.countDocuments();
-    const totalTickets = await ticketsCollection.countDocuments();
-    
-    // Calculate Approved/Pending/Rejected Tickets
-    const ticketStats = await ticketsCollection.aggregate([
-        {
-            $group: {
-                _id: '$verificationStatus',
-                count: { $sum: 1 }
-            }
-        }
-    ]).toArray();
-
-    // Calculate Role Distribution
-    const roleStats = await usersCollection.aggregate([
-        {
-            $group: {
-                _id: '$role',
-                count: { $sum: 1 }
-            }
-        }
-    ]).toArray();
-
-    // Advertisement Data
-    const advertisedCount = await ticketsCollection.countDocuments({ isAdvertised: true });
-
-    res.send({
-        totalUsers,
-        totalTickets,
-        ticketStats,
-        roleStats,
-        advertisedCount,
-        advertisementLimit: 6 
-    });
-});
-
     // --- ADMIN: Approve/Reject Ticket ---
-    app.patch('/tickets/status/:id', verifyToken, verifyAdmin,stopDemoAdmin, async (req, res) => {
+    app.patch('/tickets/status/:id', verifyToken, verifyAdmin, async (req, res) => {
         const id = req.params.id;
         const { status } = req.body; 
         const filter = { _id: new ObjectId(id) };
@@ -252,7 +142,7 @@ app.get('/admin-stats', verifyToken, verifyAdmin, async (req, res) => {
     });
 
     // --- ADMIN: Toggle Advertisement ---
-    app.patch('/tickets/advertise/:id', verifyToken, verifyAdmin, stopDemoAdmin, async (req, res) => {
+    app.patch('/tickets/advertise/:id', verifyToken, verifyAdmin, async (req, res) => {
         const id = req.params.id;
         const { isAdvertised } = req.body; 
         
@@ -278,7 +168,7 @@ app.get('/admin-stats', verifyToken, verifyAdmin, async (req, res) => {
     });
 
     // --- VENDOR: Accept/Reject Booking ---
-    app.patch('/bookings/status/:id', verifyToken,stopDemoAdmin, async (req, res) => {
+    app.patch('/bookings/status/:id', verifyToken, async (req, res) => {
         const id = req.params.id;
         const { status } = req.body; 
         const filter = { _id: new ObjectId(id) };
@@ -319,7 +209,7 @@ app.get('/admin-stats', verifyToken, verifyAdmin, async (req, res) => {
         return booking.status === 'paid' ? sum + booking.totalPrice : sum;
       }, 0);
 
-      // Chart Data
+      // Prepare Chart Data
       const chartData = bookings.reduce((acc, booking) => {
          if (booking.status === 'paid') {
              const existing = acc.find(item => item.name === booking.ticketTitle);
@@ -336,7 +226,7 @@ app.get('/admin-stats', verifyToken, verifyAdmin, async (req, res) => {
     });
 
     // --- Delete a Ticket ---
-    app.delete('/tickets/:id', verifyToken,stopDemoAdmin, async (req, res) => {
+    app.delete('/tickets/:id', verifyToken, async (req, res) => {
         const id = req.params.id;
         const query = { _id: new ObjectId(id) };
         const result = await ticketsCollection.deleteOne(query);
@@ -350,14 +240,14 @@ app.get('/admin-stats', verifyToken, verifyAdmin, async (req, res) => {
       res.send(result);
     });
 
-    app.post('/tickets', verifyToken,stopDemoAdmin, async (req, res) => {
+    app.post('/tickets', verifyToken, async (req, res) => {
         const item = req.body;
         const result = await ticketsCollection.insertOne(item);
         res.send(result);
     });
 
     // Update a Ticket
-    app.patch('/tickets/:id', verifyToken,stopDemoAdmin, async (req, res) => {
+    app.patch('/tickets/:id', verifyToken, async (req, res) => {
       const id = req.params.id;
       const updatedTicket = req.body;
       const filter = { _id: new ObjectId(id) };
@@ -421,7 +311,14 @@ app.get('/admin-stats', verifyToken, verifyAdmin, async (req, res) => {
       const result = await bookingsCollection.find(query).toArray();
       res.send(result);
     });
-  
+    
+    // 3. Delete/Cancel a Booking
+    // app.delete('/bookings/:id', verifyToken, async(req, res) => {
+    //     const id = req.params.id;
+    //     const query = { _id: new ObjectId(id) };
+    //     const result = await bookingsCollection.deleteOne(query);
+    //     res.send(result);
+    // })
     // 3. Delete/Cancel a Booking (Only if status is 'pending')
     app.delete('/bookings/:id', verifyToken, async(req, res) => {
         const id = req.params.id;
@@ -435,7 +332,7 @@ app.get('/admin-stats', verifyToken, verifyAdmin, async (req, res) => {
             return res.status(404).send({ message: "Booking not found" });
         }
         
-        //  Only allow cancel if status is 'pending'
+        // Requirement 2: Only allow cancel if status is 'pending'
         if (booking.status !== 'pending') {
             return res.status(403).send({ message: "Cannot cancel. Vendor has already accepted or it is paid." });
         }
@@ -445,7 +342,7 @@ app.get('/admin-stats', verifyToken, verifyAdmin, async (req, res) => {
         res.send(result);
     })
 
-    // --- Payment - Stripe ---
+    // --- Payment Intent - Stripe ---
     app.post('/create-payment-intent', verifyToken, async (req, res) => {
       const { price } = req.body;
       const amount = parseInt(price * 100); 
@@ -493,12 +390,3 @@ app.get('/admin-stats', verifyToken, verifyAdmin, async (req, res) => {
   } finally {
   }
 }
-run().catch(console.dir);
-
-app.get('/', (req, res) => {
-  res.send('TicketBari Server is running');
-});
-
-app.listen(port, () => {
-  console.log(`TicketBari is running on port ${port}`);
-});
