@@ -1,12 +1,17 @@
+const dns = require('dns');
+dns.setServers(['8.8.8.8', '8.8.4.4']);
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
-require('dotenv').config();
 const admin = require("firebase-admin");
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 const app = express();
 const port = process.env.PORT || 5000;
+
+// const dns = require('dns');
+// dns.setDefaultResultOrder('ipv4first');
 
 // Initialize Firebase Admin
 // const serviceAccount = require("./serviceAccountKey.json");
@@ -51,7 +56,13 @@ app.use(express.json());
 //const uri= "mongodb://ticketadmin:Wg18oaS1nhPtDlBA@cluster0.hytrggc.mongodb.net/?appName=Cluster0&retryWrites=true&w=majority";
 // const uri= "mongodb+srv://ticketadmin:CRg8SgXIPf1KLCq5@cluster0.shyhiog.mongodb.net/?appName=Cluster0";
 
-const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.hytrggc.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
+// const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.hytrggc.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
+// const uri=`mongodb+srv://ticketadmin:CRg8SgXIPf1KLCq5@cluster0.hytrggc.mongodb.net/?appName=Cluster0`;
+// const uri =`mongodb://ticketadmin:CRg8SgXIPf1KLCq5@cluster0-shard-00-00.xxxxx.mongodb.net:27017,
+// cluster0-shard-00-01.xxxxx.mongodb.net:27017,
+// cluster0-shard-00-02.xxxxx.mongodb.net:27017/dbname?ssl=true&replicaSet=atlas-xxx-shard-0&authSource=admin&retryWrites=true&w=majority`
+// const uri = `mongodb+srv://${process.env.MONGODB_USER}:${process.env.MONGODB_PASS}@cluster0.iw4kl2c.mongodb.net/?retryWrites=true&w=majority`;
+const uri = process.env.MONGODB_URI;
 const client = new MongoClient(uri, {
   serverApi: {
     version: ServerApiVersion.v1,
@@ -64,8 +75,8 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     // Connect client to server
-    await client.connect(); 
-    console.log("✅ Successfully connected to MongoDB!");
+    // await client.connect(); 
+    // console.log("✅ Successfully connected to MongoDB!");
     
     const db = client.db('TicketBariDB');
     const usersCollection = db.collection('users');
@@ -509,6 +520,7 @@ app.get('/admin-stats', verifyToken, verifyAdmin, async (req, res) => {
 
       res.send(insertResult);
     });
+    // await client.db("admin").command({ ping: 1 });
 
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
